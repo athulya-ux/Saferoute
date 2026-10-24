@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SafeRoute - Women Route Safety Platform</title>
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+    <!-- TOP HEADER -->
+    <header class="app-header">
+        <div class="header-left">
+            <div class="logo-badge">
+                <i class="fa-solid fa-shield-heart text-pink"></i>
+            </div>
+            <div class="brand-text">
+                <h1>SafeRoute</h1>
+                <span class="sub-badge"><i class="fa-solid fa-venus"></i> Women-Only Safe Transit</span>
+            </div>
+        </div>
+
+        <div class="header-right">
+            <!-- Anti-Tamper / Power-Off Guard Status Pill -->
+            <button class="tamper-header-pill" id="tamperShieldBadge" onclick="openTamperSettingsModal()" title="Anti-PowerOff & SIM Removal Guard">
+                <i class="fa-solid fa-lock text-green"></i>
+                <span>Guard: Armed (7799)</span>
+            </button>
+
+            <!-- 2-Women Live Companion Test Button -->
+            <button class="btn-companion-mode" onclick="openCompanionWindow()" title="Open Companion Window to test 2 women agreeing and live chatting">
+                <i class="fa-solid fa-user-group text-pink"></i>
+                <span>2-Women Test</span>
+            </button>
+
+            <!-- Time of Day Selector -->
+            <div class="time-selector-pill" title="Time of Day affects lighting & crowd scores">
+                <i class="fa-regular fa-clock"></i>
+                <select id="timeOfDaySelect">
+                    <option value="current">Auto (Current)</option>
+                    <option value="morning">Morning (06-12)</option>
+                    <option value="afternoon">Afternoon (12-17)</option>
+                    <option value="evening">Evening (17-21)</option>
+                    <option value="night">Night (21-06)</option>
+                </select>
+            </div>
+
+            <!-- User Auth / Anonymous Profile Button -->
+            <button class="profile-pill-btn" id="profilePillBtn" onclick="openAuthModal()">
+                <i class="fa-solid fa-user-shield"></i>
+                <span id="userHandleDisplay">Verify &amp; Join</span>
+            </button>
+
+            <!-- Emergency SOS Quick Button -->
+            <button class="header-sos-btn" onclick="openTab('emergency')">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                <span>SOS</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- UNVERIFIED NOTICE BANNER (Disappears once verified) -->
+    <div class="verification-notice-bar" id="verificationBanner">
+        <div class="notice-content">
+            <i class="fa-solid fa-shield-halved text-amber"></i>
+            <span>Women verification protects our safe community. Declare your identity &amp; unlock Walk Together radar.</span>
+        </div>
+        <div class="notice-actions-group">
+            <button class="notice-action-btn" onclick="openAuthModal()">Verify Now</button>
+            <button class="notice-switch-btn" onclick="switchUserPersona(2)" title="Test as 2nd Woman Traveler">Switch to Companion #2</button>
+        </div>
+    </div>
+
+    <!-- MAIN APP CONTAINER -->
+    <div class="app-layout">
+        
+        <!-- MAP VIEWPORT (Center / Top on Mobile) -->
+        <div class="map-container">
+            <div id="map"></div>
+
+            <!-- Floating Map Controls -->
+            <div class="map-floating-controls">
+                <button class="map-ctrl-btn" onclick="locateUserGPS()" title="My GPS Location">
+                    <i class="fa-solid fa-crosshairs"></i>
+                </button>
+                <button class="map-ctrl-btn" id="filterLightsBtn" onclick="toggleLayer('lights')" title="Toggle Street Lights">
+                    <i class="fa-solid fa-lightbulb"></i>
+                </button>
+                <button class="map-ctrl-btn" id="filterHelpBtn" onclick="toggleLayer('help')" title="Toggle 5km Help Points">
+                    <i class="fa-solid fa-hospital-user"></i>
+                </button>
+                <button class="map-ctrl-btn" id="filterIncidentsBtn" onclick="toggleLayer('incidents')" title="Toggle Community Reports">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                </button>
+            </div>
+
+            <!-- Map Legend / Status Pill -->
+            <div class="map-legend-pill">
+                <span class="legend-item"><span class="dot dot-green"></span> Safest Route</span>
+                <span class="legend-item"><span class="dot dot-yellow"></span> Street Light</span>
+                <span class="legend-item"><span class="dot dot-blue"></span> Police / Hospital</span>
+                <span class="legend-item"><span class="dot dot-red"></span> Incident Report</span>
+            </div>
+
+            <!-- 10-SECOND CANCELLABLE WARNING TOAST (Shown when user chooses unsafe route) -->
+            <div class="cancellable-warning-drawer" id="unsafeRouteWarningToast" style="display: none;">
+                <div class="warning-header">
+                    <i class="fa-solid fa-circle-radiation text-red"></i>
+                    <div>
+                        <strong>Low Safety Route Selected!</strong>
+                        <p id="unsafeWarningSubtitle">This route has reported dark stretches. Live trip sharing will broadcast in <span id="cancelCountdownSec" class="countdown-num">10</span>s.</p>
+                    </div>
+                </div>
+                <div class="warning-actions">
+                    <button class="btn-cancel-trip" onclick="cancelUnsafeTrip()">Cancel &amp; Pick Safest Route</button>
+                    <button class="btn-acknowledge" onclick="acknowledgeUnsafeTrip()">Proceed With Live Share</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- BOTTOM INTERACTIVE PANELS (Mobile Bottom Sheet / Side Panel on Desktop) -->
+        <main class="bottom-sheet-panel">
+
+            <!-- TAB 1: ROUTES & NAVIGATION (MVP FEATURE 1) -->
+            <section class="tab-content active" id="tab-routes">
+                <div class="route-search-card">
+                    <div class="search-title">
+                        <h3><i class="fa-solid fa-route text-pink"></i> Plan Safe Route</h3>
+                        <span class="badge-tag">OSM Walking Routing</span>
+                    </div>
+
+                    <div class="input-route-group">
+                        <div class="input-row">
+                            <span class="point-icon green-dot"></span>
+                            <input type="text" id="startLocationInput" placeholder="Start Location (or click map)" value="Majestic City Interchange">
+                            <button class="btn-inline-gps" onclick="setStartToGPS()" title="Use Current GPS"><i class="fa-solid fa-location-crosshairs"></i></button>
+                        </div>
+                        <div class="input-connector"></div>
+                        <div class="input-row">
+                            <span class="point-icon red-dot"></span>
+                            <input type="text" id="destLocationInput" placeholder="Destination (or click map)" value="Commercial Street Boulevard">
+                            <button class="btn-inline-swap" onclick="swapLocations()" title="Swap"><i class="fa-solid fa-arrows-up-down"></i></button>
+                        </div>
+                    </div>
+
+                    <!-- Preset sample safe corridors for instant testing -->
+                    <div class="quick-presets">
+                        <span class="preset-label">Quick Corridors:</span>
+                        <button class="preset-chip" onclick="applyPreset('majestic_commercial')">Majestic &rarr; Commercial St</button>
+                        <button class="preset-chip" onclick="applyPreset('cubbon_mgroad')">Cubbon Park &rarr; MG Road</button>
+                        <button class="preset-chip" onclick="applyPreset('campus_metro')">Campus &rarr; Metro Stn</button>
+                    </div>
+
+                    <button class="btn-primary-calculate" id="btnCalculateRoute" onclick="calculateRouteSafety()">
+                        <i class="fa-solid fa-shield-halved"></i> Find Safest Routes
+                    </button>
+                </div>
+
+                <!-- Evaluated Routes List Container -->
+                <div id="routesResultsSection" class="routes-results-list" style="display: none;">
+                    <div class="results-header">
+                        <h4>Evaluated Routes (Safest Marked)</h4>
+                        <span id="routeComparisonCount">3 options analyzed</span>
+                    </div>
+
+                    <!-- Injected route cards -->
+                    <div id="routeCardsContainer" class="cards-deck"></div>
+                </div>
+            </section>
+
+            <!-- TAB 2: STREET LIGHTS, CROWD & INCIDENTS (MVP FEATURE 2) -->
+            <section class="tab-content" id="tab-incidents">
+                <div class="panel-card">
+                    <div class="panel-card-header">
+                        <div>
+                            <h3><i class="fa-solid fa-bullhorn text-pink"></i> Street Lights &amp; Reports</h3>
+                            <p class="section-desc">Crowd levels and active community reports (auto-expire in 30 days).</p>
+                        </div>
+                        <button class="btn-report-danger" onclick="openReportModal()">
+                            <i class="fa-solid fa-plus"></i> Report Spot
+                        </button>
+                    </div>
+
+                    <!-- Lighting & Crowd Summary Stats -->
+                    <div class="metrics-grid">
+                        <div class="metric-box">
+                            <i class="fa-solid fa-lightbulb text-yellow"></i>
+                            <div class="metric-info">
+                                <span class="metric-val" id="statStreetLights">28</span>
+                                <span class="metric-lbl">Street Lights Tracked</span>
+                            </div>
+                        </div>
+                        <div class="metric-box">
+                            <i class="fa-solid fa-users text-blue"></i>
+                            <div class="metric-info">
+                                <span class="metric-val" id="statCrowdLevel">High</span>
+                                <span class="metric-lbl">Current Crowd Level</span>
+                            </div>
+                        </div>
+                        <div class="metric-box">
+                            <i class="fa-solid fa-triangle-exclamation text-red"></i>
+                            <div class="metric-info">
+                                <span class="metric-val" id="statActiveIncidents">3</span>
+                                <span class="metric-lbl">Active 30-Day Warnings</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Crowd by Time of Day Guide -->
+                    <div class="crowd-schedule-card">
+                        <h5><i class="fa-regular fa-clock"></i> Crowd Pattern by Time of Day</h5>
+                        <div class="time-schedule-bars">
+                            <div class="time-bar-item">
+                                <span class="time-name">Morning (06-12)</span>
+                                <div class="bar-fill bar-high"></div>
+                                <span class="bar-tag">Bustling Commute</span>
+                            </div>
+                            <div class="time-bar-item">
+                                <span class="time-name">Afternoon (12-17)</span>
+                                <div class="bar-fill bar-moderate"></div>
+                                <span class="bar-tag">Moderate Footfall</span>
+                            </div>
+                            <div class="time-bar-item">
+                                <span class="time-name">Evening (17-21)</span>
+                                <div class="bar-fill bar-high"></div>
+                                <span class="bar-tag">High Commercial Crowd</span>
+                            </div>
+                            <div class="time-bar-item">
+                                <span class="time-name">Night (21-06)</span>
+                                <div class="bar-fill bar-low"></div>
+                                <span class="bar-tag">Low / Precautions Advised</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Active Reports List with Confirmations -->
+                    <div class="incidents-list-container">
+                        <h5>Active Verified Safety Warnings</h5>
+                        <div id="incidentsList" class="incident-cards-scroll"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 3: NEARBY HELP & TRANSPORT (MVP FEATURE 3) -->
+            <section class="tab-content" id="tab-help">
+                <div class="panel-card">
+                    <div class="panel-card-header">
+                        <div>
+                            <h3><i class="fa-solid fa-life-ring text-pink"></i> Nearby Help &amp; Transit</h3>
+                            <p class="section-desc">Within 5 km: Police, Hospitals, and Pink Transit.</p>
+                        </div>
+                    </div>
+
+                    <!-- Quick Ride Booking & Cab App Link -->
+                    <div class="cab-booking-banner">
+                        <div class="cab-info">
+                            <i class="fa-solid fa-taxi text-pink"></i>
+                            <div>
+                                <strong>Need a Direct Ride?</strong>
+                                <p>Book pre-routed cab or call 24/7 Verified Women Pink Cabs.</p>
+                            </div>
+                        </div>
+                        <div class="cab-buttons-row">
+                            <a id="btnUberDirect" href="https://m.uber.com" target="_blank" class="cab-btn uber-btn">
+                                <i class="fa-brands fa-uber"></i> Uber
+                            </a>
+                            <a id="btnOlaDirect" href="https://book.olacabs.com" target="_blank" class="cab-btn ola-btn">
+                                <i class="fa-solid fa-car"></i> Ola
+                            </a>
+                            <a href="tel:08022224444" class="cab-btn pinkcab-btn">
+                                <i class="fa-solid fa-phone"></i> Pink Cab
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Bus Routes & Women-Safety Transit -->
+                    <div class="transit-schedule-section">
+                        <h5><i class="fa-solid fa-bus text-pink"></i> Bus Routes &amp; Pink Pass Feeder</h5>
+                        <div id="busScheduleContainer" class="bus-cards-list"></div>
+                    </div>
+
+                    <!-- Help Points Filter Tabs (Police / Hospital / Bus) -->
+                    <div class="help-filter-tabs">
+                        <button class="help-tab-btn active" onclick="filterHelpCategory('all')">All (5km)</button>
+                        <button class="help-tab-btn" onclick="filterHelpCategory('police')"><i class="fa-solid fa-building-shield"></i> Police</button>
+                        <button class="help-tab-btn" onclick="filterHelpCategory('hospital')"><i class="fa-solid fa-hospital"></i> Hospitals</button>
+                        <button class="help-tab-btn" onclick="filterHelpCategory('bus_stop')"><i class="fa-solid fa-bus"></i> Bus Stops</button>
+                    </div>
+
+                    <!-- Help Points List -->
+                    <div id="helpPointsList" class="help-points-scroll"></div>
+                </div>
+            </section>
+
+            <!-- TAB 4: WALK TOGETHER (1 KM MUTUAL CONSENT ONLY) (FEATURE 5) -->
+            <section class="tab-content" id="tab-walk">
+                <div class="panel-card">
+                    <div class="panel-card-header">
+                        <div>
+                            <h3><i class="fa-solid fa-people-arrows text-pink"></i> Walk Together Radar</h3>
+                            <p class="section-desc">Mutual consent between 2 verified women within 1 km. Off by default.</p>
+                        </div>
+                        <!-- Radar Opt-in Switch -->
+                        <div class="radar-switch-wrapper">
+                            <label class="switch">
+                                <input type="checkbox" id="walkOptInToggle" onchange="toggleWalkRadar(this.checked)">
+                                <span class="slider round"></span>
+                            </label>
+                            <span id="radarStatusLabel" class="radar-status-text">Invisible</span>
+                        </div>
+                    </div>
+
+                    <!-- 2-Women Interactive Companion Test Bar -->
+                    <div class="companion-test-bar">
+                        <div class="test-bar-left">
+                            <i class="fa-solid fa-users-viewfinder text-pink"></i>
+                            <div>
+                                <strong>Testing 2 Women Mutual Walk?</strong>
+                                <span>Send request &rarr; companion accepts &rarr; live chat opens.</span>
+                            </div>
+                        </div>
+                        <button class="btn-launch-companion" onclick="openCompanionWindow()">
+                            <i class="fa-solid fa-arrow-up-right-from-square"></i> Open 2nd Window
+                        </button>
+                    </div>
+
+                    <!-- Privacy Assurance Badge -->
+                    <div class="privacy-guarantee-pill">
+                        <i class="fa-solid fa-user-secret"></i>
+                        <span>Zero Exact Location Sharing. Anonymous handles only (~300m fuzzed range).</span>
+                    </div>
+
+                    <!-- Radar Wave Animation Container -->
+                    <div class="radar-scanner-view" id="radarScannerBox" style="display: none;">
+                        <div class="radar-waves">
+                            <div class="wave wave1"></div>
+                            <div class="wave wave2"></div>
+                            <div class="wave wave3"></div>
+                            <div class="radar-blip-center">
+                                <i class="fa-solid fa-person-walking text-pink"></i>
+                            </div>
+                        </div>
+                        <p class="radar-searching-text">Scanning for verified women travelers within 1 km...</p>
+                    </div>
+
+                    <!-- Nearby Anonymous Travelers -->
+                    <div class="nearby-travelers-section">
+                        <h5>Nearby Travelers in Radar Range (<span id="nearbyCount">0</span> found)</h5>
+                        <div id="nearbyTravelersList" class="travelers-deck"></div>
+                    </div>
+
+                    <!-- Live In-App Chat Drawer (Opens only upon mutual consent) -->
+                    <div class="walk-chat-drawer" id="walkChatDrawer" style="display: none;">
+                        <div class="chat-header">
+                            <div class="chat-participant-info">
+                                <span class="chat-partner-avatar"><i class="fa-solid fa-user-shield"></i></span>
+                                <div>
+                                    <strong id="chatPartnerHandle">SafeTraveler #412</strong>
+                                    <span class="chat-status-active"><span class="dot-live"></span> Active Walk Session</span>
+                                </div>
+                            </div>
+                            <div class="chat-header-actions">
+                                <button class="btn-block-user" onclick="blockCurrentTraveler()" title="Block &amp; Report User">
+                                    <i class="fa-solid fa-ban"></i> Block
+                                </button>
+                                <button class="btn-end-trip" onclick="endCurrentWalkTrip()" title="Finish Walk &amp; Purge Chat">
+                                    <i class="fa-solid fa-flag-checkered"></i> End Trip
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Chat Messages Container -->
+                        <div class="chat-messages-body" id="chatMessagesBox">
+                            <div class="chat-system-bubble">
+                                <i class="fa-solid fa-lock"></i> End-to-end anonymous transit chat. Real names and phone numbers are never shared. Messages expire when trip ends.
+                            </div>
+                        </div>
+
+                        <!-- Chat Input Box -->
+                        <div class="chat-input-bar">
+                            <input type="text" id="chatMessageInput" placeholder="Message companion..." onkeypress="handleChatEnter(event)">
+                            <button class="btn-send-message" onclick="sendWalkChatMessage()">
+                                <i class="fa-solid fa-paper-plane"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 5: EMERGENCY SOS & ANTI-TAMPER POWER-OFF GUARD (FEATURE 6 + TAMPER PROTECTION) -->
+            <section class="tab-content" id="tab-emergency">
+                <div class="panel-card emergency-panel-bg">
+                    
+                    <!-- GIANT SOS BUTTON -->
+                    <div class="sos-trigger-container">
+                        <button class="big-sos-button" id="mainSosButton" onclick="triggerEmergencySOS()">
+                            <div class="sos-inner-circle">
+                                <i class="fa-solid fa-bell"></i>
+                                <span class="sos-text">SOS</span>
+                                <span class="sos-hint">TAP FOR HELP</span>
+                            </div>
+                            <div class="sos-pulse-ring"></div>
+                        </button>
+                    </div>
+
+                    <p class="sos-broadcast-info">
+                        Pressing SOS broadcasts live GPS coordinates &amp; map link to emergency contacts and alerts nearby safe response units.
+                    </p>
+
+                    <!-- ANTI-TAMPER & POWER-OFF / SIM REMOVAL PROTECTION CARD -->
+                    <div class="anti-tamper-control-card">
+                        <div class="tamper-card-header">
+                            <div class="tamper-icon-badge">
+                                <i class="fa-solid fa-shield-virus"></i>
+                            </div>
+                            <div>
+                                <h4>Power-Off &amp; SIM Tamper Guard</h4>
+                                <span class="guard-status-armed"><i class="fa-solid fa-circle-check"></i> Armed &amp; Monitored</span>
+                            </div>
+                            <button class="btn-settings-pill" onclick="openTamperSettingsModal()">
+                                <i class="fa-solid fa-gear"></i> PIN Settings
+                            </button>
+                        </div>
+                        <p class="tamper-desc-text">
+                            Phone <strong>cannot be powered off or SIM removed</strong> without your secret Safety Key (Default: <b>7799</b>). If an attacker attempts shutdown, alerts with live GPS are automatically sent to Police (112) and saved contacts.
+                        </p>
+                        <div class="tamper-test-buttons-row">
+                            <button class="btn-test-tamper" onclick="triggerTamperLockdown('poweroff_attempt', 'Attacker attempting forced device power-off')">
+                                <i class="fa-solid fa-power-off"></i> Test Power-Off Shield
+                            </button>
+                            <button class="btn-test-tamper" onclick="triggerTamperLockdown('sim_eject_offline', 'Attacker attempting SIM card removal')">
+                                <i class="fa-solid fa-sim-card"></i> Test SIM Ejection Shield
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Audible Siren Alarm Toggle (Web Audio API) -->
+                    <div class="siren-toggle-row">
+                        <div class="siren-info">
+                            <i class="fa-solid fa-volume-high text-red"></i>
+                            <div>
+                                <strong>Loud Siren Alarm</strong>
+                                <span>High-decibel audible alarm to deter harassers</span>
+                            </div>
+                        </div>
+                        <button class="btn-siren-toggle" id="btnSiren" onclick="toggleAudioSiren()">
+                            <i class="fa-solid fa-play"></i> Sound Alarm
+                        </button>
+                    </div>
+
+                    <!-- Emergency Helplines Quick Dial -->
+                    <div class="helplines-grid">
+                        <a href="tel:112" class="helpline-card emergency-red">
+                            <span class="helpline-num">112</span>
+                            <span class="helpline-name">National Emergency Support</span>
+                            <span class="helpline-action"><i class="fa-solid fa-phone"></i> Direct Call</span>
+                        </a>
+                        <a href="tel:1091" class="helpline-card women-pink">
+                            <span class="helpline-num">1091</span>
+                            <span class="helpline-name">Women Helpline (24/7)</span>
+                            <span class="helpline-action"><i class="fa-solid fa-phone"></i> Direct Call</span>
+                        </a>
+                        <a href="tel:181" class="helpline-card warning-amber">
+                            <span class="helpline-num">181</span>
+                            <span class="helpline-name">Women in Distress (Govt)</span>
+                            <span class="helpline-action"><i class="fa-solid fa-phone"></i> Direct Call</span>
+                        </a>
+                        <a href="tel:08022942411" class="helpline-card blue-patrol">
+                            <span class="helpline-num">Pink Hoysala</span>
+                            <span class="helpline-name">City Pink Police Patrol</span>
+                            <span class="helpline-action"><i class="fa-solid fa-phone"></i> Direct Call</span>
+                        </a>
+                    </div>
+
+                    <!-- Emergency Contacts List & Add -->
+                    <div class="emergency-contacts-section">
+                        <div class="contacts-header">
+                            <h5>Saved Emergency Contacts (<span id="contactsCount">0</span>)</h5>
+                            <button class="btn-add-contact" onclick="openAddContactModal()">
+                                <i class="fa-solid fa-user-plus"></i> Add Contact
+                            </button>
+                        </div>
+                        <div id="emergencyContactsList" class="contacts-cards-list"></div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- BOTTOM NAVIGATION BAR (Mobile First) -->
+    <nav class="bottom-nav-bar">
+        <button class="nav-item active" data-tab="routes" onclick="openTab('routes')">
+            <i class="fa-solid fa-route"></i>
+            <span>Routes</span>
+        </button>
+        <button class="nav-item" data-tab="incidents" onclick="openTab('incidents')">
+            <i class="fa-solid fa-lightbulb"></i>
+            <span>Lights</span>
+        </button>
+        <button class="nav-item" data-tab="help" onclick="openTab('help')">
+            <i class="fa-solid fa-life-ring"></i>
+            <span>Help 5km</span>
+        </button>
+        <button class="nav-item" data-tab="walk" onclick="openTab('walk')">
+            <i class="fa-solid fa-people-arrows"></i>
+            <span>Walk With</span>
+        </button>
+        <button class="nav-item nav-sos" data-tab="emergency" onclick="openTab('emergency')">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <span>SOS</span>
+        </button>
+    </nav>
+
+    <!-- ======================================================== -->
+    <!-- MODALS & OVERLAYS -->
+    <!-- ======================================================== -->
+
+    <!-- FULL-SCREEN ANTI-TAMPER / POWER-OFF LOCKDOWN OVERLAY -->
+    <div id="tamperLockdownOverlay" class="tamper-lockdown-fullscreen" style="display: none;">
+        <div class="tamper-dialog-box">
+            <div class="tamper-alert-badge">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+            <h2>UNAUTHORIZED POWER-OFF INTERCEPTED</h2>
+            <p id="tamperReasonSubtitle" class="tamper-reason">Attempted device shutdown or SIM ejection detected.</p>
+            
+            <div id="tamperCountdownBox" class="tamper-countdown-card">
+                <p>Enter your Secret Safety Key to authorize shutdown. If unverified in <span id="tamperCountdownNum" class="countdown-big">10</span> seconds, <b>POLICE (112) AND SAVED CONTACTS WILL BE ALERTED WITH LIVE GPS</b>.</p>
+                <div class="countdown-bar-outer">
+                    <div class="countdown-bar-inner"></div>
+                </div>
+            </div>
+
+            <!-- PIN DISPLAY & STATUS -->
+            <div id="tamperKeypadBox">
+                <div id="tamperPinDots" class="pin-dots-container">
+                    <span class="empty-pin-text">Enter Security PIN</span>
+                </div>
+                <p id="tamperStatusMsg" class="tamper-status-hint">Default Safety Key: <b>7799</b> | Duress Key: <b>9911</b></p>
+
+                <!-- NUMERIC KEYPAD -->
+                <div class="numeric-keypad-grid">
+                    <button class="num-btn" onclick="appendPinDigit('1')">1</button>
+                    <button class="num-btn" onclick="appendPinDigit('2')">2</button>
+                    <button class="num-btn" onclick="appendPinDigit('3')">3</button>
+                    <button class="num-btn" onclick="appendPinDigit('4')">4</button>
+                    <button class="num-btn" onclick="appendPinDigit('5')">5</button>
+                    <button class="num-btn" onclick="appendPinDigit('6')">6</button>
+                    <button class="num-btn" onclick="appendPinDigit('7')">7</button>
+                    <button class="num-btn" onclick="appendPinDigit('8')">8</button>
+                    <button class="num-btn" onclick="appendPinDigit('9')">9</button>
+                    <button class="num-btn clear-btn" onclick="clearPinBuffer()">Clear</button>
+                    <button class="num-btn" onclick="appendPinDigit('0')">0</button>
+                    <button class="num-btn submit-btn" onclick="submitTamperPin()"><i class="fa-solid fa-check"></i></button>
+                </div>
+            </div>
+
+            <!-- POLICE DISPATCHED BANNER (Shown if timeout expires) -->
+            <div id="tamperAlertDispatchedBanner" style="display: none; margin-top: 15px;">
+                <div id="policeDispatchDetails"></div>
+                <button class="btn-dismiss-tamper" onclick="dismissTamperAlert()">Disarm Alarm with PIN</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- INCOMING WALK INVITATION MODAL (2-Women Mutual Consent Flow) -->
+    <div class="modal-overlay" id="incomingWalkModal">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-people-pulling text-pink"></i> Walk Together Invitation</h3>
+                <button class="modal-close-btn" onclick="closeModal('incomingWalkModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="incoming-invitation-card">
+                    <div class="avatar-companion-circle">
+                        <i class="fa-solid fa-venus"></i>
+                    </div>
+                    <h4 id="incomingRequesterHandle">SafeTraveler #412</h4>
+                    <span id="incomingRequesterDist" class="badge-tag">~350m away</span>
+                    <p id="incomingRequesterMessage" class="invitation-text">
+                        A verified woman traveler would like to accompany you on the safe walking route.
+                    </p>
+                    <div class="privacy-note">
+                        <i class="fa-solid fa-user-shield"></i> End-to-end anonymous. In-app live chat opens upon mutual agreement.
+                    </div>
+                    <div class="invitation-buttons-row">
+                        <button class="btn-accept-walk" onclick="respondToIncomingWalk('accepted')">
+                            <i class="fa-solid fa-circle-check"></i> Accept &amp; Walk Together
+                        </button>
+                        <button class="btn-decline-walk" onclick="respondToIncomingWalk('rejected')">
+                            <i class="fa-solid fa-circle-xmark"></i> Decline
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAMPER SETTINGS MODAL -->
+    <div class="modal-overlay" id="tamperSettingsModal">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-shield-halved text-pink"></i> Anti-PowerOff &amp; SIM Settings</h3>
+                <button class="modal-close-btn" onclick="closeModal('tamperSettingsModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="tamperSettingsForm" onsubmit="saveTamperKeySettings(event)">
+                    <div class="form-group">
+                        <label>Secret Safety Key (PIN to authorize power-off / app exit)</label>
+                        <input type="text" id="settingsSecurityKey" placeholder="e.g. 7799" value="7799" maxlength="6" required>
+                        <span class="form-hint">Enter this key whenever you legitimately want to power off your phone.</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Silent Duress Key (Panic code if coerced by attacker)</label>
+                        <input type="text" id="settingsDuressKey" placeholder="e.g. 9911" value="9911" maxlength="6" required>
+                        <span class="form-hint">If forced by an attacker, enter this key. It appears to shut down normally, but <b>secretly alerts Police &amp; emergency contacts</b>.</span>
+                    </div>
+
+                    <label class="primary-contact-toggle">
+                        <input type="checkbox" id="settingsEnabledCheckbox" checked>
+                        <span>Enable Power-Off &amp; SIM Ejection Protection Guard</span>
+                    </label>
+
+                    <button type="submit" class="btn-submit-report">Save Security Keys</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 1: ROUTE SAFETY BREAKDOWN MODAL (FEATURE 1) -->
+    <div class="modal-overlay" id="breakdownModal">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-chart-pie text-pink"></i> Safety Score Breakdown</h3>
+                <button class="modal-close-btn" onclick="closeModal('breakdownModal')">&times;</button>
+            </div>
+            <div class="modal-body" id="breakdownModalBody">
+                <!-- Dynamically populated -->
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 2: REPORT INCIDENT MODAL (FEATURE 2) -->
+    <div class="modal-overlay" id="reportIncidentModal">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-bullhorn text-pink"></i> Report Unsafe Spot</h3>
+                <button class="modal-close-btn" onclick="closeModal('reportIncidentModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="incidentReportForm" onsubmit="submitIncidentReport(event)">
+                    <div class="form-group">
+                        <label>Incident Type</label>
+                        <select id="reportTypeSelect" required>
+                            <option value="dark_street">🌑 Dark Street / Non-functional Street Lamps</option>
+                            <option value="harassment">⚠️ Harassment / Catcalling</option>
+                            <option value="unsafe_spot">🚧 Unsafe Blind Spot / Isolated Stretch</option>
+                            <option value="accident">💥 Accident / Road Hazard</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Location / Landmark</label>
+                        <input type="text" id="reportAddressInput" placeholder="Street name or nearby landmark" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Description (Details help other women stay safe)</label>
+                        <textarea id="reportDescInput" rows="3" placeholder="Describe the safety concern..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Severity Level</label>
+                        <div class="radio-chips-group">
+                            <label class="chip-label"><input type="radio" name="severity" value="low"> Low</label>
+                            <label class="chip-label"><input type="radio" name="severity" value="medium" checked> Medium</label>
+                            <label class="chip-label"><input type="radio" name="severity" value="high"> High Risk</label>
+                            <label class="chip-label"><input type="radio" name="severity" value="critical"> Critical</label>
+                        </div>
+                    </div>
+                    <p class="form-hint"><i class="fa-solid fa-info-circle"></i> Reports automatically expire after 30 days and require confirmation from community members.</p>
+                    <button type="submit" class="btn-submit-report">Submit Safety Report</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 3: WOMEN VERIFICATION & AUTH (FEATURE 4) -->
+    <div class="modal-overlay" id="authModal">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-venus-mars text-pink"></i> Women-Only Verification</h3>
+                <button class="modal-close-btn" onclick="closeModal('authModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                
+                <!-- Step 1: Mobile Phone OTP -->
+                <div class="auth-step-box" id="authStepPhone">
+                    <h4>Step 1: Sign up with Mobile OTP</h4>
+                    <p class="auth-subtext">Rate-limited security with instant verification.</p>
+                    <div class="form-group">
+                        <label>Mobile Number</label>
+                        <input type="tel" id="authPhoneInput" placeholder="+91 9876543210" value="+919876543210">
+                    </div>
+                    <button class="btn-primary-calculate" onclick="sendAuthOTP()">Send OTP</button>
+
+                    <!-- OTP Code Entry -->
+                    <div id="otpInputSection" style="display: none; margin-top: 15px;">
+                        <div class="form-group">
+                            <label>6-Digit Verification Code</label>
+                            <input type="text" id="authOtpCodeInput" placeholder="123456" maxlength="6">
+                            <span id="demoOtpHint" class="otp-hint-badge"></span>
+                        </div>
+                        <button class="btn-primary-calculate" onclick="verifyAuthOTP()">Verify &amp; Continue</button>
+                    </div>
+                </div>
+
+                <!-- Step 2: Affirmative Self-Declaration -->
+                <div class="auth-step-box" id="authStepDeclaration" style="display: none;">
+                    <h4>Step 2: Self-Declaration</h4>
+                    <div class="declaration-card">
+                        <i class="fa-solid fa-hand-holding-heart text-pink"></i>
+                        <p>SafeRoute is an exclusive safe-space created solely to protect women travelers. By continuing, you affirm your identity as a woman seeking safe transit.</p>
+                        <label class="declaration-checkbox">
+                            <input type="checkbox" id="declareWomanCheck">
+                            <span>I solemnly declare that I am a woman seeking safe transit with SafeRoute.</span>
+                        </label>
+                    </div>
+                    <button class="btn-primary-calculate" onclick="submitWomanDeclaration()">Confirm Declaration</button>
+                </div>
+
+                <!-- Step 3: Optional Zero-Biometric Selfie & Passkey / WebAuthn -->
+                <div class="auth-step-box" id="authStepPasskey" style="display: none;">
+                    <h4>Step 3: Device Passkey &amp; Privacy</h4>
+                    <p class="auth-subtext">Login with fingerprint or Face ID staying 100% on your device. Zero biometric data stored on our server.</p>
+
+                    <button class="btn-passkey-setup" onclick="setupWebAuthnPasskey()">
+                        <i class="fa-solid fa-fingerprint"></i> Link Fingerprint / Passkey
+                    </button>
+
+                    <div class="selfie-optional-box">
+                        <label>Optional Moderator Verified Selfie</label>
+                        <p class="small-text">Selfie is reviewed for liveness and <strong>permanently deleted immediately</strong> after approval.</p>
+                        <input type="file" id="selfieUploadInput" accept="image/*" onchange="handleSelfieUpload(event)">
+                        <button class="btn-outline-action" onclick="submitSelfieVerify()">Verify &amp; Discard Photo</button>
+                    </div>
+
+                    <!-- Right to Delete Account -->
+                    <div class="delete-account-box">
+                        <button class="btn-danger-link" onclick="deleteUserAccount()">
+                            <i class="fa-solid fa-trash-can"></i> Delete My Account &amp; All Data
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 4: ADD EMERGENCY CONTACT -->
+    <div class="modal-overlay" id="addContactModal">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-user-plus text-pink"></i> Add Emergency Contact</h3>
+                <button class="modal-close-btn" onclick="closeModal('addContactModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="addContactForm" onsubmit="saveEmergencyContact(event)">
+                    <div class="form-group">
+                        <label>Contact Full Name</label>
+                        <input type="text" id="contactNameInput" placeholder="Mom, Sister, Best Friend" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Mobile Number (For Live Location SMS)</label>
+                        <input type="tel" id="contactPhoneInput" placeholder="+91 9876543210" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Relationship</label>
+                        <select id="contactRelationSelect">
+                            <option value="Mother">Mother</option>
+                            <option value="Father">Father</option>
+                            <option value="Sister">Sister</option>
+                            <option value="Brother">Brother</option>
+                            <option value="Friend">Friend</option>
+                            <option value="Partner">Partner / Spouse</option>
+                            <option value="Guardian">Guardian</option>
+                        </select>
+                    </div>
+                    <label class="primary-contact-toggle">
+                        <input type="checkbox" id="contactIsPrimary" checked>
+                        <span>Set as Primary SOS Contact</span>
+                    </label>
+                    <button type="submit" class="btn-submit-report">Save Contact</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Leaflet.js JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <!-- Socket.IO JS -->
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+    <!-- Custom Application Modules -->
+    <script src="/static/js/map.js"></script>
+    <script src="/static/js/routes.js"></script>
+    <script src="/static/js/incidents.js"></script>
+    <script src="/static/js/help.js"></script>
+    <script src="/static/js/walk.js"></script>
+    <script src="/static/js/emergency.js"></script>
+    <script src="/static/js/tamper.js"></script>
+    <script src="/static/js/auth.js"></script>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
